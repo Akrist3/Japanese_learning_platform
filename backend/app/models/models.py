@@ -42,6 +42,42 @@ class UserProgress(Base):
 
     user = relationship("User", back_populates="progress")
 
+class RoadmapMissionProgress(Base):
+    __tablename__ = "roadmap_mission_progress"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True
+    )
+
+    mission_id = Column(
+        String,
+        nullable=False,
+        index=True
+    )
+
+    completed = Column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
+
+    xp_earned = Column(
+        Integer,
+        default=0,
+        nullable=False
+    )
+
+    completed_at = Column(
+        DateTime,
+        nullable=True
+    )
+
+    user = relationship("User")
 
 class UserSettings(Base):
     __tablename__ = "user_settings"

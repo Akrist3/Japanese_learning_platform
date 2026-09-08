@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from app.api import (
     auth, onboarding, user, kana, vocabulary, kanji, grammar, verbs,
     flashcards, gamification, jlpt, exams, listening, reading, speaking,
-    dictionary, ai_tutor, mistakes, resources, admin
+    dictionary, ai_tutor, mistakes, resources, admin, placement, roadmap
 )
 
 api_router = APIRouter()
@@ -19,6 +19,8 @@ api_router.include_router(flashcards.router)
 api_router.include_router(gamification.router)
 api_router.include_router(jlpt.router)
 api_router.include_router(exams.router)
+api_router.include_router(placement.router)
+api_router.include_router(roadmap.router)
 api_router.include_router(listening.router)
 api_router.include_router(reading.router)
 api_router.include_router(speaking.router)
