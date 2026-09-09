@@ -37,6 +37,7 @@ import { Dictionary } from './pages/Dictionary';
 import { ResourceLibrary } from './pages/ResourceLibrary';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AITutorPage } from './pages/AITutorPage';
+import Mission from './pages/Mission';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -103,7 +104,14 @@ export const AppContent: React.FC = () => {
                 </ProtectedRoute>
               }
             />
-
+            <Route
+              path="/mission/:missionId"
+              element={
+                <ProtectedRoute>
+                  <Mission />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/roadmap"
               element={

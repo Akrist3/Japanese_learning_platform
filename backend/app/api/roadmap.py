@@ -461,11 +461,11 @@ def add_personalized_missions(
 
         personalized.append(mission_copy)
 
-    personalized.sort(
-        key=lambda mission: (
-            0 if mission["priority"] == "high" else 1
-        )
-    )
+    # NOTE: intentionally no reordering here.
+    # Priority/focus_skills are still attached above so the frontend
+    # can highlight weak-skill missions, but the curriculum sequence
+    # (n5-01 -> n5-02 -> n5-03 -> ...) must stay intact for sequential
+    # unlocking to make sense.
 
     return personalized
 
@@ -596,14 +596,40 @@ def get_roadmap(
             mission_number += 1
 
     # -----------------------------------------------------
-    # Determine active mission
+    # Determine mission status (completed / active / locked)
+    #
+    # Walk the roadmap in order:
+    #   - already completed  -> "completed"
+    #   - first not-yet-done -> "active"
+    #   - everything after   -> "locked"
     # -----------------------------------------------------
 
-    if roadmap:
+    completed_records = (
+        db.query(RoadmapMissionProgress)
+        .filter(
+            RoadmapMissionProgress.user_id == current_user.id,
+            RoadmapMissionProgress.completed.is_(True)
+        )
+        .all()
+    )
 
-        roadmap[0]["status"] = "active"
+    completed_ids = {
+        record.mission_id
+        for record in completed_records
+    }
 
-        for mission in roadmap[1:]:
+    found_active = False
+
+    for mission in roadmap:
+
+        if mission["id"] in completed_ids:
+            mission["status"] = "completed"
+
+        elif not found_active:
+            mission["status"] = "active"
+            found_active = True
+
+        else:
             mission["status"] = "locked"
 
     # -----------------------------------------------------
@@ -665,6 +691,84 @@ def complete_mission(
             status_code=404,
             detail="Mission not found"
         )
+
+    # -----------------------------------------------------
+    # Prevent skipping missions
+    # -----------------------------------------------------
+
+    current_level = current_user.current_jlpt or "N5"
+    target_level = current_user.target_jlpt or "N3"
+
+    if level_index(target_level) < level_index(current_level):
+        target_level = current_level
+
+    roadmap_levels = levels_between(
+        current_level,
+        target_level
+    )
+
+    ordered_missions = []
+
+    for level in roadmap_levels:
+        ordered_missions.extend(MISSIONS.get(level, []))
+
+    # Find the position of the requested mission
+    mission_index = next(
+        (
+            index
+            for index, item in enumerate(ordered_missions)
+            if item["id"] == mission_id
+        ),
+        None
+    )
+
+    if mission_index is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Mission is not part of your current roadmap"
+        )
+
+    # Get previous missions
+    previous_missions = ordered_missions[:mission_index]
+
+    if previous_missions:
+
+        previous_ids = [
+            item["id"]
+            for item in previous_missions
+        ]
+
+        completed_previous = (
+            db.query(RoadmapMissionProgress)
+            .filter(
+                RoadmapMissionProgress.user_id == current_user.id,
+                RoadmapMissionProgress.mission_id.in_(previous_ids),
+                RoadmapMissionProgress.completed.is_(True)
+            )
+            .count()
+        )
+
+        if completed_previous != len(previous_missions):
+
+            next_required = next(
+                item
+                for item in previous_missions
+                if item["id"] not in {
+                    record.mission_id
+                    for record in db.query(RoadmapMissionProgress)
+                    .filter(
+                        RoadmapMissionProgress.user_id == current_user.id,
+                        RoadmapMissionProgress.mission_id.in_(previous_ids),
+                        RoadmapMissionProgress.completed.is_(True)
+                    )
+                    .all()
+                }
+            )
+
+            raise HTTPException(
+                status_code=400,
+                detail=f"Complete {next_required['id']} before attempting this mission."
+            )
 
     # -----------------------------------------------------
     # Check if already completed
