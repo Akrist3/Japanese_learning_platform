@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+
 import {
   Check,
   ChevronRight,
@@ -13,7 +14,9 @@ import {
   Languages,
   PenLine,
 } from "lucide-react";
+
 import { speakJapanese } from "../services/audio";
+import { useAuth } from "../context/AuthContext";
 
 interface ListeningExercise {
   id: number;
@@ -37,6 +40,10 @@ interface ListeningAttemptResponse {
   correct_option: number;
   dictation_correct: boolean;
   xp_earned: number;
+  total_xp: number;
+  level: number;
+  leveled_up: boolean;
+  streak_count: number;
   replay_count: number;
   first_attempt: boolean;
 }
@@ -44,24 +51,43 @@ interface ListeningAttemptResponse {
 const SESSION_SIZE = 10;
 
 export function Listening() {
+  // ============================================================
+  // AUTH
+  // ============================================================
+
+  const { refreshUserData } = useAuth();
+
   const [exercises, setExercises] = useState<ListeningExercise[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [selectedOption, setSelectedOption] =
+    useState<number | null>(null);
+
   const [dictation, setDictation] = useState("");
 
-  const [questionAttempted, setQuestionAttempted] = useState(false);
-  const [questionCorrect, setQuestionCorrect] = useState(false);
+  const [questionAttempted, setQuestionAttempted] =
+    useState(false);
 
-  const [dictationChecked, setDictationChecked] = useState(false);
-  const [dictationCorrect, setDictationCorrect] = useState(false);
+  const [questionCorrect, setQuestionCorrect] =
+    useState(false);
 
-  const [showTranscript, setShowTranscript] = useState(false);
-  const [showTranslation, setShowTranslation] = useState(false);
-  const [showHint, setShowHint] = useState(false);
+  const [dictationChecked, setDictationChecked] =
+    useState(false);
+
+  const [dictationCorrect, setDictationCorrect] =
+    useState(false);
+
+  const [showTranscript, setShowTranscript] =
+    useState(false);
+
+  const [showTranslation, setShowTranslation] =
+    useState(false);
+
+  const [showHint, setShowHint] =
+    useState(false);
 
   const [speed, setSpeed] = useState(1);
   const [replayCount, setReplayCount] = useState(0);
@@ -70,9 +96,11 @@ export function Listening() {
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [firstTryCorrect, setFirstTryCorrect] = useState(0);
 
-  const [sessionFinished, setSessionFinished] = useState(false);
+  const [sessionFinished, setSessionFinished] =
+    useState(false);
 
   const [submitting, setSubmitting] = useState(false);
+
   const [attemptResult, setAttemptResult] =
     useState<ListeningAttemptResponse | null>(null);
 
@@ -91,18 +119,27 @@ export function Listening() {
         );
 
         if (!response.ok) {
-          throw new Error("Failed to load listening exercises.");
+          throw new Error(
+            "Failed to load listening exercises."
+          );
         }
 
-        const data: ListeningExercise[] = await response.json();
+        const data: ListeningExercise[] =
+          await response.json();
 
         if (!data.length) {
-          throw new Error("No listening exercises are available.");
+          throw new Error(
+            "No listening exercises are available."
+          );
         }
 
-        const shuffled = [...data].sort(() => Math.random() - 0.5);
+        const shuffled = [...data].sort(
+          () => Math.random() - 0.5
+        );
 
-        setExercises(shuffled.slice(0, SESSION_SIZE));
+        setExercises(
+          shuffled.slice(0, SESSION_SIZE)
+        );
       } catch (err) {
         console.error(err);
 
@@ -117,7 +154,8 @@ export function Listening() {
     loadExercises();
   }, []);
 
-  const currentExercise = exercises[currentIndex];
+  const currentExercise =
+    exercises[currentIndex];
 
   // ============================================================
   // PROGRESS
@@ -126,7 +164,9 @@ export function Listening() {
   const progress = useMemo(() => {
     if (!exercises.length) return 0;
 
-    return ((currentIndex + 1) / exercises.length) * 100;
+    return (
+      ((currentIndex + 1) / exercises.length) * 100
+    );
   }, [currentIndex, exercises.length]);
 
   // ============================================================
@@ -136,7 +176,10 @@ export function Listening() {
   const playAudio = () => {
     if (!currentExercise) return;
 
-    speakJapanese(currentExercise.audio_text, speed);
+    speakJapanese(
+      currentExercise.audio_text,
+      speed
+    );
 
     setReplayCount((prev) => prev + 1);
   };
@@ -158,27 +201,38 @@ export function Listening() {
       setSubmitting(true);
       setError("");
 
+      // Get JWT token
       const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error(
+          "You are not logged in. Please log in again."
+        );
+      }
 
       const response = await fetch(
         "http://localhost:8000/listening/attempt",
         {
           method: "POST",
+
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
+
           body: JSON.stringify({
             exercise_id: currentExercise.id,
             selected_option: selectedOption,
             replay_count: replayCount,
-            dictation_answer: dictation.trim() || null,
+            dictation_answer:
+              dictation.trim() || null,
           }),
         }
       );
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
+        const errorData =
+          await response.json().catch(() => null);
 
         throw new Error(
           errorData?.detail ||
@@ -189,24 +243,52 @@ export function Listening() {
       const result: ListeningAttemptResponse =
         await response.json();
 
-      // Save backend result
+      // ========================================================
+      // SAVE BACKEND RESULT
+      // ========================================================
+
       setAttemptResult(result);
 
-      // Update question state
+      // ========================================================
+      // REFRESH GLOBAL USER PROGRESS
+      // ========================================================
+
+      await refreshUserData();
+
+      // ========================================================
+      // UPDATE QUESTION STATE
+      // ========================================================
+
       setQuestionAttempted(true);
       setQuestionCorrect(result.correct);
 
-      // Update session statistics
+      // ========================================================
+      // UPDATE SESSION STATISTICS
+      // ========================================================
+
       if (result.correct) {
-        setCorrectAnswers((prev) => prev + 1);
+        setCorrectAnswers(
+          (prev) => prev + 1
+        );
       }
 
-      if (result.first_attempt && result.correct) {
-        setFirstTryCorrect((prev) => prev + 1);
+      if (
+        result.first_attempt &&
+        result.correct
+      ) {
+        setFirstTryCorrect(
+          (prev) => prev + 1
+        );
       }
 
-      // XP comes ONLY from backend
-      setScore((prev) => prev + result.xp_earned);
+      // ========================================================
+      // XP COMES ONLY FROM BACKEND
+      // ========================================================
+
+      setScore(
+        (prev) => prev + result.xp_earned
+      );
+
     } catch (err) {
       console.error(err);
 
@@ -225,7 +307,10 @@ export function Listening() {
   // ============================================================
 
   const checkDictation = () => {
-    if (!currentExercise || !dictation.trim()) {
+    if (
+      !currentExercise ||
+      !dictation.trim()
+    ) {
       return;
     }
 
@@ -237,19 +322,22 @@ export function Listening() {
 
     const isCorrect =
       normalize(dictation) ===
-      normalize(currentExercise.dictation_answer);
+      normalize(
+        currentExercise.dictation_answer
+      );
 
     setDictationChecked(true);
     setDictationCorrect(isCorrect);
 
     /*
      * IMPORTANT:
+     *
      * Do NOT add XP here.
      *
      * XP is controlled by the backend.
      *
-     * In Step 3.4 we will make dictation part of the
-     * same backend attempt so its XP is stored properly.
+     * The dictation answer is already sent
+     * to the backend when Check Answer is pressed.
      */
   };
 
@@ -258,12 +346,17 @@ export function Listening() {
   // ============================================================
 
   const nextQuestion = () => {
-    if (currentIndex >= exercises.length - 1) {
+    if (
+      currentIndex >=
+      exercises.length - 1
+    ) {
       setSessionFinished(true);
       return;
     }
 
-    setCurrentIndex((prev) => prev + 1);
+    setCurrentIndex(
+      (prev) => prev + 1
+    );
 
     setSelectedOption(null);
     setDictation("");
@@ -291,9 +384,14 @@ export function Listening() {
   // ============================================================
 
   const restartSession = () => {
-    const shuffled = [...exercises].sort(() => Math.random() - 0.5);
+    const shuffled = [...exercises].sort(
+      () => Math.random() - 0.5
+    );
 
-    setExercises(shuffled.slice(0, SESSION_SIZE));
+    setExercises(
+      shuffled.slice(0, SESSION_SIZE)
+    );
+
     setCurrentIndex(0);
 
     setSelectedOption(null);
@@ -367,7 +465,9 @@ export function Listening() {
           </p>
 
           <button
-            onClick={() => window.location.reload()}
+            onClick={() =>
+              window.location.reload()
+            }
             className="mt-6 px-5 py-3 rounded-xl bg-pink-500 hover:bg-pink-400 text-white font-medium transition"
           >
             Try Again
@@ -385,14 +485,18 @@ export function Listening() {
     const accuracy =
       exercises.length > 0
         ? Math.round(
-            (correctAnswers / exercises.length) * 100
+            (correctAnswers /
+              exercises.length) *
+              100
           )
         : 0;
 
     const firstAccuracy =
       exercises.length > 0
         ? Math.round(
-            (firstTryCorrect / exercises.length) * 100
+            (firstTryCorrect /
+              exercises.length) *
+              100
           )
         : 0;
 
@@ -460,7 +564,9 @@ export function Listening() {
                   Questions completed
                 </span>
 
-                <span>{exercises.length}</span>
+                <span>
+                  {exercises.length}
+                </span>
               </div>
 
               <div className="flex justify-between text-sm">
@@ -468,7 +574,9 @@ export function Listening() {
                   Correct answers
                 </span>
 
-                <span>{correctAnswers}</span>
+                <span>
+                  {correctAnswers}
+                </span>
               </div>
 
               <div className="flex justify-between text-sm">
@@ -476,7 +584,9 @@ export function Listening() {
                   First-try correct
                 </span>
 
-                <span>{firstTryCorrect}</span>
+                <span>
+                  {firstTryCorrect}
+                </span>
               </div>
             </div>
           </div>
@@ -554,7 +664,9 @@ export function Listening() {
           <div className="h-2 bg-white/5 rounded-full overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-pink-500 to-purple-500 rounded-full transition-all duration-500"
-              style={{ width: `${progress}%` }}
+              style={{
+                width: `${progress}%`,
+              }}
             />
           </div>
         </div>
@@ -606,21 +718,25 @@ export function Listening() {
                   </div>
 
                   <div className="flex gap-2">
-                    {[1, 0.7].map((value) => (
-                      <button
-                        key={value}
-                        onClick={() => setSpeed(value)}
-                        className={`px-4 py-2 rounded-lg text-sm border transition ${
-                          speed === value
-                            ? "bg-white text-black border-white"
-                            : "bg-white/5 text-slate-400 border-white/10 hover:bg-white/10"
-                        }`}
-                      >
-                        {value === 1
-                          ? "Normal 1.0×"
-                          : "Slow 0.7×"}
-                      </button>
-                    ))}
+                    {[1, 0.7].map(
+                      (value) => (
+                        <button
+                          key={value}
+                          onClick={() =>
+                            setSpeed(value)
+                          }
+                          className={`px-4 py-2 rounded-lg text-sm border transition ${
+                            speed === value
+                              ? "bg-white text-black border-white"
+                              : "bg-white/5 text-slate-400 border-white/10 hover:bg-white/10"
+                          }`}
+                        >
+                          {value === 1
+                            ? "Normal 1.0×"
+                            : "Slow 0.7×"}
+                        </button>
+                      )
+                    )}
                   </div>
                 </div>
 
@@ -641,13 +757,17 @@ export function Listening() {
                 {[
                   18, 28, 14, 34, 22, 40, 17, 30,
                   23, 36, 15, 27, 20, 32, 17, 25,
-                ].map((height, index) => (
-                  <div
-                    key={index}
-                    className="w-1.5 rounded-full bg-pink-400"
-                    style={{ height: `${height}px` }}
-                  />
-                ))}
+                ].map(
+                  (height, index) => (
+                    <div
+                      key={index}
+                      className="w-1.5 rounded-full bg-pink-400"
+                      style={{
+                        height: `${height}px`,
+                      }}
+                    />
+                  )
+                )}
               </div>
             </div>
 
@@ -671,66 +791,71 @@ export function Listening() {
 
               {/* OPTIONS */}
               <div className="space-y-3">
-                {currentExercise.options.map((option, index) => {
-                  const isSelected =
-                    selectedOption === index;
+                {currentExercise.options.map(
+                  (option, index) => {
+                    const isSelected =
+                      selectedOption === index;
 
-                  const isCorrect =
-                    questionAttempted &&
-                    index === currentExercise.correct_option;
+                    const isCorrect =
+                      questionAttempted &&
+                      index ===
+                        currentExercise.correct_option;
 
-                  const isWrong =
-                    questionAttempted &&
-                    isSelected &&
-                    !isCorrect;
+                    const isWrong =
+                      questionAttempted &&
+                      isSelected &&
+                      !isCorrect;
 
-                  return (
-                    <button
-                      key={index}
-                      disabled={questionAttempted}
-                      onClick={() =>
-                        setSelectedOption(index)
-                      }
-                      className={`w-full text-left rounded-xl border p-4 transition ${
-                        isCorrect
-                          ? "bg-green-500/10 border-green-500/50"
-                          : isWrong
-                          ? "bg-red-500/10 border-red-500/50"
-                          : isSelected
-                          ? "bg-pink-500/10 border-pink-500/50"
-                          : "bg-white/[0.02] border-white/10 hover:border-white/25 hover:bg-white/[0.04]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div
-                          className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold shrink-0 ${
-                            isCorrect
-                              ? "bg-green-500/20 text-green-400"
-                              : isWrong
-                              ? "bg-red-500/20 text-red-400"
-                              : isSelected
-                              ? "bg-pink-500 text-white"
-                              : "bg-white/5 text-slate-400"
-                          }`}
-                        >
-                          {String.fromCharCode(65 + index)}
+                    return (
+                      <button
+                        key={index}
+                        disabled={questionAttempted}
+                        onClick={() =>
+                          setSelectedOption(index)
+                        }
+                        className={`w-full text-left rounded-xl border p-4 transition ${
+                          isCorrect
+                            ? "bg-green-500/10 border-green-500/50"
+                            : isWrong
+                            ? "bg-red-500/10 border-red-500/50"
+                            : isSelected
+                            ? "bg-pink-500/10 border-pink-500/50"
+                            : "bg-white/[0.02] border-white/10 hover:border-white/25 hover:bg-white/[0.04]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div
+                            className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold shrink-0 ${
+                              isCorrect
+                                ? "bg-green-500/20 text-green-400"
+                                : isWrong
+                                ? "bg-red-500/20 text-red-400"
+                                : isSelected
+                                ? "bg-pink-500 text-white"
+                                : "bg-white/5 text-slate-400"
+                            }`}
+                          >
+                            {String.fromCharCode(
+                              65 + index
+                            )}
+                          </div>
+
+                          <span className="flex-1 text-base">
+                            {option}
+                          </span>
+
+                          {isCorrect && (
+                            <Check className="w-5 h-5 text-green-400" />
+                          )}
+
+                          {isWrong && (
+                            <X className="w-5 h-5 text-red-400" />
+                          )}
                         </div>
-
-                        <span className="flex-1 text-base">
-                          {option}
-                        </span>
-
-                        {isCorrect && (
-                          <Check className="w-5 h-5 text-green-400" />
-                        )}
-
-                        {isWrong && (
-                          <X className="w-5 h-5 text-red-400" />
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
+                      </button>
+                    );
+                  }
+                )}
               </div>
 
               {/* CHECK ANSWER */}
@@ -750,13 +875,14 @@ export function Listening() {
               )}
 
               {/* BACKEND ERROR */}
-              {error && currentExercise && (
-                <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-4">
-                  <p className="text-sm text-red-400">
-                    {error}
-                  </p>
-                </div>
-              )}
+              {error &&
+                currentExercise && (
+                  <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+                    <p className="text-sm text-red-400">
+                      {error}
+                    </p>
+                  </div>
+                )}
 
               {/* FEEDBACK */}
               {questionAttempted && (
@@ -817,7 +943,9 @@ export function Listening() {
                 <button
                   disabled={!questionAttempted}
                   onClick={() =>
-                    setShowTranscript((prev) => !prev)
+                    setShowTranscript(
+                      (prev) => !prev
+                    )
                   }
                   className="flex items-center gap-3 p-4 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] disabled:opacity-30 disabled:cursor-not-allowed text-left transition"
                 >
@@ -840,7 +968,9 @@ export function Listening() {
                 <button
                   disabled={!questionAttempted}
                   onClick={() =>
-                    setShowTranslation((prev) => !prev)
+                    setShowTranslation(
+                      (prev) => !prev
+                    )
                   }
                   className="flex items-center gap-3 p-4 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] disabled:opacity-30 disabled:cursor-not-allowed text-left transition"
                 >
@@ -862,7 +992,9 @@ export function Listening() {
                 {/* HINT */}
                 <button
                   onClick={() =>
-                    setShowHint((prev) => !prev)
+                    setShowHint(
+                      (prev) => !prev
+                    )
                   }
                   className="flex items-center gap-3 p-4 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] text-left transition"
                 >
@@ -943,9 +1075,10 @@ export function Listening() {
               <textarea
                 value={dictation}
                 onChange={(e) => {
-                  setDictation(e.target.value);
+                  setDictation(
+                    e.target.value
+                  );
 
-                  // Allow the user to correct and re-check
                   setDictationChecked(false);
                   setDictationCorrect(false);
                 }}
@@ -999,7 +1132,8 @@ export function Listening() {
                 disabled={!questionAttempted}
                 className="flex items-center justify-center gap-2 w-full md:w-auto px-7 py-3.5 rounded-xl bg-pink-500 hover:bg-pink-400 disabled:opacity-30 disabled:cursor-not-allowed transition font-semibold"
               >
-                {currentIndex === exercises.length - 1
+                {currentIndex ===
+                exercises.length - 1
                   ? "Finish Session"
                   : "Next Question"}
 
