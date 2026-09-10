@@ -1,11 +1,31 @@
 import httpx
 from app.config import settings
+from app.services.grammar_engine import analyze_sentence
+
 
 async def generate_ai_tutor_response(query: str, context: str = "", mode: str = "explain") -> dict:
     """
     Generates AI explanations, sentence corrections, or roleplay dialogues.
-    Uses OpenAI API if OPENAI_API_KEY is configured; otherwise uses standard rule-based responses.
+
+    - mode == "check_sentence": always runs the deterministic grammar_engine
+      (real tokenization + rule-based analysis). This mode does NOT depend on
+      OpenAI, so sentence checking is instant, free, and consistent even
+      without an API key configured.
+    - other modes ("explain", "roleplay"): use OpenAI if OPENAI_API_KEY is
+      configured; otherwise fall back to canned rule-based responses.
     """
+
+    if mode == "check_sentence":
+        result = analyze_sentence(query)
+        return {
+            "success": True,
+            "answer": result["summary"],
+            "tokens": result["tokens"],
+            "issues": result["issues"],
+            "corrected_sentence": query,
+            "provider": "Japanese Journey Grammar Engine",
+        }
+
     if settings.OPENAI_API_KEY:
         try:
             async with httpx.AsyncClient() as client:
@@ -28,28 +48,9 @@ async def generate_ai_tutor_response(query: str, context: str = "", mode: str = 
         except Exception:
             pass  # Fallback to local rule engine if API call fails
 
-    # Rule-Based Japanese Grammar & Sentence Checker Fallback Engine
     query_lower = query.lower()
-    
-    if mode == "check_sentence":
-        # Rule check for sentence
-        if "は" in query and "が" in query:
-            explanation = "Your sentence correctly uses particles! Remember: は marks the topic (known info/contrast), while が marks the specific subject (new info/emphasis)."
-        elif "行きました" in query or "いきます" in query:
-            explanation = "Sentence looks grammatically correct! Destination takes に or へ (e.g. 日本へ行きます)."
-        elif "たべます" in query or "食べました" in query:
-            explanation = "Good usage of the transitive verb 食べる! Direct object takes を particle (e.g. りんごを食べます)."
-        else:
-            explanation = f"Sentence Analysis for: '{query}'\nGrammar structure: Valid Japanese phrasing. Notice sentence-final verb order and particle attachments."
-        
-        return {
-            "success": True,
-            "answer": explanation,
-            "corrected_sentence": query,
-            "provider": "Japanese Journey Rule Engine"
-        }
-    
-    elif mode == "roleplay":
+
+    if mode == "roleplay":
         return {
             "success": True,
             "answer": "いらっしゃいませ！何にしますか？ (Welcome! What would you like to order?)\n\nTry responding with: 『ラーメンをください』 (Ramen please!)",

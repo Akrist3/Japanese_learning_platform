@@ -61,14 +61,14 @@ export const AppContent: React.FC = () => {
   const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#050816] text-slate-100 flex flex-col">
       <Navbar />
       <XPNotification />
 
       <div className="flex flex-1">
         {user && <Sidebar />}
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 min-w-0 overflow-y-auto bg-[#050816]">
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Landing />} />
