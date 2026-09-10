@@ -2,15 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
-from app.models.models import ListeningAttempt
-
-from app.database import get_db
-from app.models.models import (
-    ListeningAttempt,
-    UserProgress
-)
+from app.models.models import ListeningAttempt, UserProgress
 from app.services.auth_service import get_current_user
+from app.database import get_db
 
+from datetime import datetime
 router = APIRouter(prefix="/listening", tags=["listening"])
 
 
@@ -621,11 +617,12 @@ def submit_listening_attempt(
 
     xp_earned = 0
 
-    if correct:
-        xp_earned += 10
+    if first_attempt:
+        if correct:
+            xp_earned += 10
 
-    if dictation_correct:
-        xp_earned += 5
+        if dictation_correct:
+            xp_earned += 5
 
     # --------------------------------------------------------
     # Save listening attempt
@@ -681,7 +678,7 @@ def submit_listening_attempt(
     # Update streak
     # --------------------------------------------------------
 
-    today_str = datetime.utcnow().date().isoformat()
+    today_str = datetime.now().date().isoformat()
 
     if progress.last_active_date != today_str:
         progress.streak_count += 1

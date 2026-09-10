@@ -158,14 +158,7 @@ export function Listening() {
       setSubmitting(true);
       setError("");
 
-      /*
-       * Temporary fallback user ID.
-       *
-       * Later this will come from the authenticated user.
-       */
-      const userId = Number(
-        localStorage.getItem("user_id") || "1"
-      );
+      const token = localStorage.getItem("token");
 
       const response = await fetch(
         "http://localhost:8000/listening/attempt",
@@ -173,6 +166,7 @@ export function Listening() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             exercise_id: currentExercise.id,
