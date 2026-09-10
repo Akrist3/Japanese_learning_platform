@@ -238,14 +238,75 @@ class ListeningExercise(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
-    jlpt_level = Column(String, default="N5")
-    audio_text = Column(Text, nullable=False)  # For TTS generation
+    jlpt_level = Column(String, default="N5", index=True)
+    audio_text = Column(Text, nullable=False)
     transcript = Column(Text, nullable=False)
     translation = Column(Text, nullable=False)
     question = Column(Text, nullable=False)
     options_json = Column(Text, nullable=False)
     correct_option = Column(Integer, nullable=False)
 
+class ListeningAttempt(Base):
+    __tablename__ = "listening_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True
+    )
+
+    exercise_id = Column(
+        Integer,
+        ForeignKey("listening_exercises.id"),
+        nullable=False,
+        index=True
+    )
+
+    selected_option = Column(Integer, nullable=True)
+
+    correct = Column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
+
+    first_attempt = Column(
+        Boolean,
+        default=True,
+        nullable=False
+    )
+
+    replay_count = Column(
+        Integer,
+        default=0,
+        nullable=False
+    )
+
+    dictation_answer = Column(Text, nullable=True)
+
+    dictation_correct = Column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
+
+    xp_earned = Column(
+        Integer,
+        default=0,
+        nullable=False
+    )
+
+    completed_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False
+    )
+
+    user = relationship("User")
+    exercise = relationship("ListeningExercise")
 
 class MockExam(Base):
     __tablename__ = "mock_exams"

@@ -4,6 +4,7 @@ from app.config import settings
 from app.database import engine, Base
 from app.api import api_router
 from app.seed.seed_all import seed_database
+from app.api.listening import router as listening_router
 
 # Create DB tables
 Base.metadata.create_all(bind=engine)
@@ -28,6 +29,7 @@ def on_startup():
     seed_database()
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+app.include_router(listening_router)
 
 @app.get("/")
 def root():
